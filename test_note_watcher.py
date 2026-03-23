@@ -68,7 +68,7 @@ def test_process_file_skips_already_processed(tmp_path, monkeypatch):
     assert len(md_files) == 1
 
 def test_process_file_paused(tmp_path, monkeypatch):
-    from note_watcher import process_file, PAUSE_FLAG
+    from note_watcher import process_file
     txt_file = tmp_path / "test.txt"
     txt_file.write_text("A note", encoding="utf-8")
 
