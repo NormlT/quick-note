@@ -123,6 +123,7 @@ context: "page: How DNS Works | url: https://example.com/dns-guide"
    | `watch_path` | Yes | Folder where Notepad++ saves quick notes |
    | `vault_name` | No | Your Obsidian vault name for the "Open Inbox" tray action. Auto-derived from `inbox_path` parent folder if omitted. |
    | `log_path` | No | Where to write logs (defaults to `local/quick-note.log`) |
+   | `hotkey` | No | Global keyboard shortcut (default: `#+n` = Win+Shift+N). See [Changing the keyboard shortcut](#changing-the-keyboard-shortcut). |
 
    The `local/` folder is gitignored -- your config, logs, and runtime files stay private.
 
@@ -174,6 +175,36 @@ Right-click the Quick Note icon in the system tray for:
 - **Pause/Resume Watcher** -- toggle the Notepad++ file watcher
 - **Dark Mode** -- toggle between dark and light themes
 - **Exit** -- stop Quick Note and the file watcher
+
+### Changing the keyboard shortcut
+
+The default shortcut is **Win + Shift + N**. To change it, add a `hotkey` entry to `quick-note-config.json` (in your `local/` folder) using these modifier codes:
+
+| Code | Key     |
+|------|---------|
+| `#`  | Win     |
+| `+`  | Shift   |
+| `^`  | Ctrl    |
+| `!`  | Alt     |
+
+Combine the codes with a letter. Examples:
+
+| Config value | Shortcut                  |
+|--------------|---------------------------|
+| `"#+n"`      | Win + Shift + N (default) |
+| `"^+n"`      | Ctrl + Shift + N          |
+| `"#n"`       | Win + N                   |
+| `"!+n"`      | Alt + Shift + N           |
+
+Add it to your config file like this:
+
+```json
+{
+    "hotkey": "^+n"
+}
+```
+
+The change takes effect automatically within a few seconds (the script watches for config changes).
 
 ## Architecture
 

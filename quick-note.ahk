@@ -40,10 +40,11 @@ if !FileExist(CONFIG_FILE)
 PYTHON_PATH := ""
 INBOX_PATH := ""
 VAULT_NAME := ""
+HOTKEY := "#+n"
 WATCHER_PID := 0
 
 LoadConfig() {
-    global CONFIG_FILE, PYTHON_PATH, INBOX_PATH, VAULT_NAME
+    global CONFIG_FILE, PYTHON_PATH, INBOX_PATH, VAULT_NAME, HOTKEY
     if !FileExist(CONFIG_FILE) {
         TrayTip("Config not found: " CONFIG_FILE, "Quick Note", "0x10")
         return false
@@ -56,6 +57,8 @@ LoadConfig() {
             INBOX_PATH := m[1]
         if RegExMatch(configText, '"vault_name"\s*:\s*"([^"]+)"', &m)
             VAULT_NAME := m[1]
+        if RegExMatch(configText, '"hotkey"\s*:\s*"([^"]+)"', &m)
+            HOTKEY := m[1]
         ; Derive vault name from inbox_path parent if not configured
         if !VAULT_NAME && INBOX_PATH {
             normalised := StrReplace(INBOX_PATH, "/", "\")
@@ -106,6 +109,21 @@ SetDarkTitleBar(hWnd, dark) {
     DllCall("dwmapi\DwmSetWindowAttribute", "Ptr", hWnd, "Int", 20, "Int*", darkVal, "Int", 4)
 }
 
+HotkeyToDisplay(hk) {
+    display := ""
+    if InStr(hk, "#")
+        display .= "Win+"
+    if InStr(hk, "^")
+        display .= "Ctrl+"
+    if InStr(hk, "!")
+        display .= "Alt+"
+    if InStr(hk, "+")
+        display .= "Shift+"
+    key := RegExReplace(hk, "[#^!+]", "")
+    display .= StrUpper(key)
+    return display
+}
+
 ; --- Startup ---
 if !LoadConfig() {
     MsgBox("Failed to load config. Exiting.", "Quick Note Error")
@@ -126,9 +144,10 @@ LaunchWatcher()
 A_IconTip := "Quick Note Capture"
 TraySetIcon("Shell32.dll", 70)
 
+hotkeyDisplay := HotkeyToDisplay(HOTKEY)
 tray := A_TrayMenu
 tray.Delete()
-tray.Add("New Note`tWin+Shift+N", MenuNewNote)
+tray.Add("New Note`t" hotkeyDisplay, MenuNewNote)
 tray.Add("Open Inbox", MenuOpenInbox)
 tray.Add()
 tray.Add("Pause Watcher", MenuTogglePause)
@@ -138,7 +157,7 @@ if (LoadThemePref() = "dark")
     tray.Check("Dark Mode")
 tray.Add()
 tray.Add("Exit", MenuExit)
-tray.Default := "New Note`tWin+Shift+N"
+tray.Default := "New Note`t" hotkeyDisplay
 
 MenuNewNote(*) {
     ShowNoteGUI()
@@ -188,9 +207,9 @@ CleanupOnExit(reason, code) {
 
 ; --- Hotkey ---
 try {
-    Hotkey "#+n", MenuNewNote
+    Hotkey HOTKEY, MenuNewNote
 } catch {
-    TrayTip("Hotkey Win+Shift+N could not be registered", "Quick Note", "0x10")
+    TrayTip("Hotkey " hotkeyDisplay " could not be registered", "Quick Note", "0x10")
 }
 
 ; --- GUI ---

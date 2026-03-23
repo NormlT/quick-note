@@ -3,5 +3,6 @@
   "vault_name": "ObsidianVault",
   "watch_path": "C:/Users/YOUR_USERNAME/Documents/Notes/Notepad++",
   "python_path": "C:/Users/YOUR_USERNAME/AppData/Local/Programs/Python/Python312/python.exe",
-  "log_path": "C:/Users/YOUR_USERNAME/quick-note/local/quick-note.log"
+  "log_path": "C:/Users/YOUR_USERNAME/quick-note/local/quick-note.log",
+  "hotkey": "#+n"
 }
