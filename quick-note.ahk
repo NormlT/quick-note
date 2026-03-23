@@ -7,6 +7,7 @@
 Persistent
 
 ; --- Auto-reload on file change ---
+DebugLog("=== Script started/reloaded ===")
 SetTimer(WatchForChanges, 2000)
 SCRIPT_MOD_TIME := FileGetTime(A_ScriptFullPath, "M")
 
@@ -16,8 +17,18 @@ WatchForChanges() {
         currentMod := FileGetTime(A_ScriptFullPath, "M")
         if (currentMod != SCRIPT_MOD_TIME) {
             SCRIPT_MOD_TIME := currentMod
+            DebugLog("WatchForChanges: file modified, calling Reload()")
             Reload()
         }
+    }
+}
+
+; --- Debug Logging ---
+DebugLog(msg) {
+    try {
+        logFile := A_ScriptDir "\local\debug.log"
+        timestamp := FormatTime(, "yyyy-MM-dd HH:mm:ss")
+        FileAppend(timestamp " | " msg "`n", logFile, "UTF-8")
     }
 }
 
@@ -168,7 +179,8 @@ MenuExit(*) {
 }
 
 OnExit(CleanupOnExit)
-CleanupOnExit(*) {
+CleanupOnExit(reason, code) {
+    DebugLog("OnExit triggered: reason=" reason " code=" code)
     global WATCHER_PID
     if WATCHER_PID
         try ProcessClose(WATCHER_PID)
@@ -193,7 +205,10 @@ ShowNoteGUI() {
         prevHwnd := WinGetID("A")
         prevTitle := WinGetTitle("ahk_id " prevHwnd)
         prevProcess := WinGetProcessName("ahk_id " prevHwnd)
+        DebugLog("ShowNoteGUI: captured context, process=" prevProcess " hwnd=" prevHwnd)
+        DebugLog("ShowNoteGUI: calling GetBrowserUrl...")
         prevUrl := GetBrowserUrl(prevHwnd, prevProcess)
+        DebugLog("ShowNoteGUI: GetBrowserUrl returned, url=" prevUrl)
     }
 
     ; Resolve theme
@@ -384,21 +399,30 @@ GetBrowserUrl(hWnd, processName) {
     if !(exe = "chrome.exe" || exe = "msedge.exe" || exe = "firefox.exe")
         return ""
 
+    DebugLog("GetBrowserUrl: enter, exe=" exe " hwnd=" hWnd)
+
     try winClass := WinGetClass("ahk_id " hWnd)
     catch
         return ""
     ctrlTypeId := (winClass ~= "Chrome") ? UIA_DocumentControlTypeId : UIA_EditControlTypeId
+    DebugLog("GetBrowserUrl: winClass=" winClass " ctrlTypeId=" ctrlTypeId)
 
     try {
         IUIAutomation := ComObject("{FF48DBA4-60EF-4201-AA87-54103EEF594E}"
             , "{30CBE57D-D9D0-452A-AB13-7AC5AC4825EE}")
     } catch {
+        DebugLog("GetBrowserUrl: failed to create IUIAutomation")
         return ""
     }
+    DebugLog("GetBrowserUrl: IUIAutomation created")
+
     eRoot := ComValue(13, 0)
     hr := ComCall(6, IUIAutomation, "Ptr", hWnd, "Ptr*", eRoot)
-    if (hr != S_OK || !eRoot.Ptr)
+    if (hr != S_OK || !eRoot.Ptr) {
+        DebugLog("GetBrowserUrl: ElementFromHandle failed hr=" hr)
         return ""
+    }
+    DebugLog("GetBrowserUrl: ElementFromHandle OK")
 
     variant := Buffer(8 + 2 * A_PtrSize, 0)
     NumPut("UShort", 3, variant, 0)
@@ -415,36 +439,42 @@ GetBrowserUrl(hWnd, processName) {
             , "Ptr*", condition)
 
     if (hr != S_OK || !condition.Ptr) {
-        ObjRelease(eRoot.Ptr)
+        DebugLog("GetBrowserUrl: CreatePropertyCondition failed hr=" hr)
         return ""
     }
+    DebugLog("GetBrowserUrl: condition created, calling FindFirst...")
 
     eFound := ComValue(13, 0)
     hr := ComCall(5, eRoot, "UInt", TreeScope_Descendants, "Ptr", condition, "Ptr*", eFound)
     if (hr != S_OK || !eFound.Ptr) {
-        ObjRelease(condition.Ptr)
-        ObjRelease(eRoot.Ptr)
+        DebugLog("GetBrowserUrl: FindFirst failed hr=" hr)
         return ""
     }
+    DebugLog("GetBrowserUrl: FindFirst OK, getting value...")
 
     propVal := Buffer(8 + 2 * A_PtrSize, 0)
     hr := ComCall(10, eFound, "UInt", UIA_ValueValuePropertyId, "Ptr", propVal)
 
-    ObjRelease(eFound.Ptr)
-    ObjRelease(condition.Ptr)
-    ObjRelease(eRoot.Ptr)
+    ; COM pointers are auto-released by ComValue(13, ...) when they go out of scope.
+    ; Do NOT manually call ObjRelease -- that causes double-free crashes.
 
-    if (hr != S_OK)
+    if (hr != S_OK) {
+        DebugLog("GetBrowserUrl: GetPropertyValue failed hr=" hr)
         return ""
+    }
 
     try {
         pBstr := NumGet(propVal, 8, "Ptr")
-        if !pBstr
+        if !pBstr {
+            DebugLog("GetBrowserUrl: pBstr is null")
             return ""
+        }
         url := StrGet(pBstr, "UTF-16")
         DllCall("OleAut32\SysFreeString", "Ptr", pBstr)
+        DebugLog("GetBrowserUrl: success, url=" SubStr(url, 1, 80))
         return url
     } catch {
+        DebugLog("GetBrowserUrl: exception reading BSTR")
         return ""
     }
 }
