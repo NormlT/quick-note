@@ -1,4 +1,3 @@
-import pytest
 from note_capture import generate_slug
 
 def test_slug_basic():
@@ -169,9 +168,6 @@ def test_build_filename_timestamp_format():
     name = build_filename("hello world", "2026-01-05T09:05:03")
     assert name == "2026-01-05-090503-hello-world.md"
 
-
-import tempfile
-import os
 
 def test_save_note_creates_file(tmp_path):
     from note_capture import save_note

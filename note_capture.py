@@ -163,7 +163,6 @@ def _format_context_line(context: dict) -> str:
 
 
 def _format_context_frontmatter(context: dict) -> str:
-    source = context.get("source", "unknown")
     parts = []
     if "project" in context:
         parts.append(f"project: {context['project']}")

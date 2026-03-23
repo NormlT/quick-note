@@ -1,4 +1,3 @@
-import pytest
 from note_watcher import split_notes
 
 def test_split_double_blank_lines():
@@ -33,7 +32,6 @@ def test_split_whitespace_only_chunks_removed():
 
 
 import logging
-import os
 
 def test_process_file_creates_inbox_notes(tmp_path, monkeypatch):
     from note_watcher import process_file

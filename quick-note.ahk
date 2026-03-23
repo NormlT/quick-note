@@ -40,11 +40,11 @@ if !FileExist(CONFIG_FILE)
 PYTHON_PATH := ""
 INBOX_PATH := ""
 VAULT_NAME := ""
-HOTKEY := "#+n"
+HOTKEY_COMBO := "#+n"
 WATCHER_PID := 0
 
 LoadConfig() {
-    global CONFIG_FILE, PYTHON_PATH, INBOX_PATH, VAULT_NAME, HOTKEY
+    global CONFIG_FILE, PYTHON_PATH, INBOX_PATH, VAULT_NAME, HOTKEY_COMBO
     if !FileExist(CONFIG_FILE) {
         TrayTip("Config not found: " CONFIG_FILE, "Quick Note", "0x10")
         return false
@@ -58,11 +58,11 @@ LoadConfig() {
         if RegExMatch(configText, '"vault_name"\s*:\s*"([^"]+)"', &m)
             VAULT_NAME := m[1]
         if RegExMatch(configText, '"hotkey"\s*:\s*"([^"]+)"', &m)
-            HOTKEY := m[1]
+            HOTKEY_COMBO := m[1]
         ; Derive vault name from inbox_path parent if not configured
         if !VAULT_NAME && INBOX_PATH {
-            normalised := StrReplace(INBOX_PATH, "/", "\")
-            SplitPath(normalised, , &parentDir)
+            normalized := StrReplace(INBOX_PATH, "/", "\")
+            SplitPath(normalized, , &parentDir)
             SplitPath(parentDir, &derivedName)
             VAULT_NAME := derivedName
         }
@@ -144,7 +144,7 @@ LaunchWatcher()
 A_IconTip := "Quick Note Capture"
 TraySetIcon("Shell32.dll", 70)
 
-hotkeyDisplay := HotkeyToDisplay(HOTKEY)
+hotkeyDisplay := HotkeyToDisplay(HOTKEY_COMBO)
 tray := A_TrayMenu
 tray.Delete()
 tray.Add("New Note`t" hotkeyDisplay, MenuNewNote)
@@ -164,8 +164,8 @@ MenuNewNote(*) {
 }
 MenuOpenInbox(*) {
     global VAULT_NAME, INBOX_PATH
-    normalised := StrReplace(INBOX_PATH, "/", "\")
-    SplitPath(normalised, &inboxFolder)
+    normalized := StrReplace(INBOX_PATH, "/", "\")
+    SplitPath(normalized, &inboxFolder)
     Run("obsidian://open?vault=" VAULT_NAME "&file=" inboxFolder)
 }
 MenuTogglePause(*) {
@@ -207,7 +207,7 @@ CleanupOnExit(reason, code) {
 
 ; --- Hotkey ---
 try {
-    Hotkey HOTKEY, MenuNewNote
+    Hotkey HOTKEY_COMBO, MenuNewNote
 } catch {
     TrayTip("Hotkey " hotkeyDisplay " could not be registered", "Quick Note", "0x10")
 }
@@ -266,8 +266,14 @@ ShowNoteGUI() {
     wbCtrl := wb.Value
     wbCtrl.Silent := true
     wbCtrl.Navigate(tempHtml)
-    while wbCtrl.ReadyState != 4
+    startTime := A_TickCount
+    while (wbCtrl.ReadyState != 4) && ((A_TickCount - startTime) < 10000)
         Sleep(10)
+    if (wbCtrl.ReadyState != 4) {
+        TrayTip("Browser failed to load note editor within 10 seconds.", "Quick Note", "0x10")
+        noteGui.Destroy()
+        return
+    }
 
     ; Register keyboard shortcuts via low-level hook (AHK Hotkey)
     ; AHK's GUI message loop swallows Ctrl+key before the browser sees them,
