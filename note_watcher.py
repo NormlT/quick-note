@@ -67,11 +67,12 @@ def process_file(filepath: str, config: dict, logger: logging.Logger):
     chunks = split_notes(content)
     timestamp = datetime.now().isoformat(timespec="seconds")
     source_name = Path(filepath).stem
+    all_saved = True
 
     for i, chunk in enumerate(chunks):
         # Use a fresh timestamp per chunk; build_filename handles filename collisions via counter
         chunk_ts = datetime.now().isoformat(timespec="seconds") if i > 0 else timestamp
-        save_note(
+        if not save_note(
             note=chunk,
             tag="",
             window_title=f"Notepad++ -- {source_name}",
@@ -79,8 +80,15 @@ def process_file(filepath: str, config: dict, logger: logging.Logger):
             timestamp=chunk_ts,
             inbox_path=config["inbox_path"],
             log_path=config.get("log_path", ""),
-        )
+        ):
+            logger.error("Failed to create inbox note from: %s", filepath)
+            all_saved = False
+            break
         logger.info("Created inbox note from: %s", filepath)
+
+    if not all_saved:
+        logger.warning("Leaving file unmarked for retry: %s", filepath)
+        return
 
     db[filepath] = current_hash
     _save_processed_db(db)

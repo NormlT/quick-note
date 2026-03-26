@@ -73,7 +73,39 @@ LoadConfig() {
     }
 }
 
+ValidateRequiredConfig() {
+    global PYTHON_PATH, INBOX_PATH
+    if !PYTHON_PATH {
+        MsgBox("Config missing required key: python_path", "Quick Note Error")
+        return false
+    }
+    if !FileExist(PYTHON_PATH) {
+        MsgBox("Configured Python executable not found:`n" PYTHON_PATH, "Quick Note Error")
+        return false
+    }
+    if !INBOX_PATH {
+        MsgBox("Config missing required key: inbox_path", "Quick Note Error")
+        return false
+    }
+    if !DirExist(INBOX_PATH) {
+        MsgBox("Configured inbox_path not found:`n" INBOX_PATH, "Quick Note Error")
+        return false
+    }
+    return true
+}
+
 ; --- Theme ---
+GetSystemThemePref() {
+    try {
+        appsUseLightTheme := RegRead(
+            "HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+            "AppsUseLightTheme"
+        )
+        return appsUseLightTheme ? "light" : "dark"
+    }
+    return "dark"
+}
+
 LoadThemePref() {
     global SCRIPT_DIR
     prefFile := SCRIPT_DIR "\local\theme-pref.txt"
@@ -84,7 +116,7 @@ LoadThemePref() {
                 return pref
         }
     }
-    return "dark"
+    return GetSystemThemePref()
 }
 
 SaveThemePref(pref) {
@@ -124,9 +156,34 @@ HotkeyToDisplay(hk) {
     return display
 }
 
+UriEncode(str) {
+    size := StrPut(str, "UTF-8")
+    buf := Buffer(size)
+    StrPut(str, buf, "UTF-8")
+    encoded := ""
+    Loop size - 1 {
+        byte := NumGet(buf, A_Index - 1, "UChar")
+        if ((byte >= 0x30 && byte <= 0x39)
+            || (byte >= 0x41 && byte <= 0x5A)
+            || (byte >= 0x61 && byte <= 0x7A)
+            || byte = 0x2D
+            || byte = 0x2E
+            || byte = 0x5F
+            || byte = 0x7E) {
+            encoded .= Chr(byte)
+        } else {
+            encoded .= "%" Format("{:02X}", byte)
+        }
+    }
+    return encoded
+}
+
 ; --- Startup ---
 if !LoadConfig() {
     MsgBox("Failed to load config. Exiting.", "Quick Note Error")
+    ExitApp
+}
+if !ValidateRequiredConfig() {
     ExitApp
 }
 
@@ -168,7 +225,7 @@ MenuOpenInbox(*) {
     global VAULT_NAME, INBOX_PATH
     normalized := StrReplace(INBOX_PATH, "/", "\")
     SplitPath(normalized, &inboxFolder)
-    Run("obsidian://open?vault=" VAULT_NAME "&file=" inboxFolder)
+    Run("obsidian://open?vault=" UriEncode(VAULT_NAME) "&file=" UriEncode(inboxFolder))
 }
 MenuTogglePause(*) {
     global tray
@@ -232,7 +289,7 @@ ShowNoteGUI() {
         DebugLog("ShowNoteGUI: captured context, process=" prevProcess " hwnd=" prevHwnd)
         DebugLog("ShowNoteGUI: calling GetBrowserUrl...")
         prevUrl := GetBrowserUrl(prevHwnd, prevProcess)
-        DebugLog("ShowNoteGUI: GetBrowserUrl returned, url=" prevUrl)
+        DebugLog("ShowNoteGUI: GetBrowserUrl completed, hasUrl=" (prevUrl ? "yes" : "no"))
     }
 
     ; Resolve theme
@@ -366,11 +423,11 @@ DoSaveNote(noteText, tag, windowTitle, processName, url) {
     tempFile := A_Temp "\quick-note-" A_Now A_MSec ".json"
 
     jsonContent := '{"note":' JsonEscape(noteText)
-        . ',"tag":"' tag
-        . '","window_title":' JsonEscape(windowTitle)
-        . ',"process_name":"' processName
-        . '","url":' JsonEscape(url)
-        . ',"timestamp":"' timestamp '"}'
+        . ',"tag":' JsonEscape(tag)
+        . ',"window_title":' JsonEscape(windowTitle)
+        . ',"process_name":' JsonEscape(processName)
+        . ',"url":' JsonEscape(url)
+        . ',"timestamp":' JsonEscape(timestamp) '}'
 
     f := FileOpen(tempFile, "w", "UTF-8")
     f.Write(jsonContent)
@@ -379,8 +436,8 @@ DoSaveNote(noteText, tag, windowTitle, processName, url) {
     captureScript := SCRIPT_DIR "\note_capture.py"
     try {
         exitCode := RunWait('"' PYTHON_PATH '" "' captureScript '" "' tempFile '"', SCRIPT_DIR, "Hide")
-    } catch as e {
-        TrayTip("Failed to run capture script: " e.Message, "Quick Note", "0x10")
+    } catch {
+        TrayTip("Failed to run capture script. Raw note preserved in TEMP: " tempFile, "Quick Note", "0x10")
         return
     }
 
@@ -388,7 +445,7 @@ DoSaveNote(noteText, tag, windowTitle, processName, url) {
         try FileDelete(tempFile)
         TrayTip("Note saved!", "Quick Note", "0x1")
     } else {
-        TrayTip("Note save failed -- raw note preserved in TEMP", "Quick Note", "0x10")
+        TrayTip("Note save failed -- raw note preserved in TEMP: " tempFile, "Quick Note", "0x10")
     }
 }
 
@@ -412,8 +469,8 @@ DoSendToClaude(noteText, windowTitle, url) {
 
     launcherScript := SCRIPT_DIR "\claude_launcher.py"
     try Run('wt.exe "' PYTHON_PATH '" "' launcherScript '" "' tempPrompt '"')
-    catch as e
-        TrayTip("Failed to launch Claude: " e.Message, "Quick Note", "0x10")
+    catch
+        TrayTip("Failed to launch Claude. Prompt preserved in TEMP: " tempPrompt, "Quick Note", "0x10")
 }
 
 GetBrowserUrl(hWnd, processName) {
@@ -501,7 +558,7 @@ GetBrowserUrl(hWnd, processName) {
         }
         url := StrGet(pBstr, "UTF-16")
         DllCall("OleAut32\SysFreeString", "Ptr", pBstr)
-        DebugLog("GetBrowserUrl: success, url=" SubStr(url, 1, 80))
+        DebugLog("GetBrowserUrl: success")
         return url
     } catch {
         DebugLog("GetBrowserUrl: exception reading BSTR")

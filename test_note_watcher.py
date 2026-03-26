@@ -1,3 +1,6 @@
+import json
+import logging
+
 from note_watcher import split_notes
 
 def test_split_double_blank_lines():
@@ -29,9 +32,6 @@ def test_split_whitespace_only_chunks_removed():
     text = "Note one\n---\n   \n---\nNote two"
     chunks = split_notes(text)
     assert len(chunks) == 2
-
-
-import logging
 
 def test_process_file_creates_inbox_notes(tmp_path, monkeypatch):
     from note_watcher import process_file
@@ -87,3 +87,37 @@ def test_process_file_paused(tmp_path, monkeypatch):
 
     md_files = list(inbox.glob("*.md"))
     assert len(md_files) == 0  # paused, nothing created
+
+
+def test_process_file_retries_after_failed_save(tmp_path, monkeypatch):
+    from note_watcher import process_file
+
+    txt_file = tmp_path / "test.txt"
+    txt_file.write_text("Retry me", encoding="utf-8")
+
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    processed_db = tmp_path / "processed.json"
+    config = {"inbox_path": str(inbox), "log_path": str(tmp_path / "test.log")}
+    monkeypatch.setattr("note_watcher.PROCESSED_DB", str(processed_db))
+
+    calls = {"count": 0}
+
+    def fake_save_note(**kwargs):
+        calls["count"] += 1
+        return calls["count"] > 1
+
+    monkeypatch.setattr("note_watcher.save_note", fake_save_note)
+
+    logger = logging.getLogger("test-watcher")
+
+    process_file(str(txt_file), config, logger)
+    assert calls["count"] == 1
+    if processed_db.exists():
+        db = json.loads(processed_db.read_text(encoding="utf-8"))
+        assert str(txt_file) not in db
+
+    process_file(str(txt_file), config, logger)
+    assert calls["count"] == 2
+    db = json.loads(processed_db.read_text(encoding="utf-8"))
+    assert str(txt_file) in db
