@@ -8,6 +8,9 @@ on:
     paths:
       - 'requirements*.txt'
 
+permissions:
+  contents: read
+
 jobs:
   licenses:
     runs-on: ubuntu-latest
