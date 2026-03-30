@@ -102,7 +102,7 @@ context: "page: How DNS Works | url: https://example.com/dns-guide"
 2. **Clone the repo**
 
    ```
-   git clone https://github.com/NormlT/quick-note.git
+   git clone https://github.com/clatter971/quick-note.git
    cd quick-note
    ```
 
