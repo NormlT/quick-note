@@ -33,9 +33,15 @@ jobs:
 
       - name: Download AutoHotkey v2
         shell: pwsh
+        env:
+          AHK_VERSION: 2.0.19
         run: |
+          # Pulled from the AutoHotkey GitHub release rather than autohotkey.com
+          # because the latter sits behind Cloudflare's JS challenge and serves
+          # an HTML interstitial to CI runners instead of the zip.
           $zip = "$env:RUNNER_TEMP\ahk-v2.zip"
-          Invoke-WebRequest -Uri 'https://www.autohotkey.com/download/ahk-v2.zip' -OutFile $zip
+          $url = "https://github.com/AutoHotkey/AutoHotkey/releases/download/v$env:AHK_VERSION/AutoHotkey_$env:AHK_VERSION.zip"
+          Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
           Expand-Archive -Path $zip -DestinationPath "$env:RUNNER_TEMP\ahk-v2"
           $exe = (Get-ChildItem "$env:RUNNER_TEMP\ahk-v2" -Recurse -Filter 'AutoHotkey64.exe' | Select-Object -First 1).FullName
           if (-not $exe) { throw 'AutoHotkey64.exe not found in downloaded zip' }
