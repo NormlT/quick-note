@@ -5,7 +5,7 @@ import pytest
 import claude_launcher
 
 
-def test_run_claude_passes_prompt_via_stdin(monkeypatch):
+def test_run_claude_passes_prompt_as_argv(monkeypatch):
     captured = {}
 
     def fake_run(args, **kwargs):
@@ -13,14 +13,64 @@ def test_run_claude_passes_prompt_via_stdin(monkeypatch):
         captured["kwargs"] = kwargs
         return subprocess.CompletedProcess(args=args, returncode=0)
 
+    monkeypatch.setattr(claude_launcher, "_resolve_claude_command", lambda: ["/usr/bin/claude"])
     monkeypatch.setattr(subprocess, "run", fake_run)
 
     result = claude_launcher.run_claude("hello from prompt")
 
     assert result.returncode == 0
-    assert captured["args"] == ["claude", "--model", "sonnet"]
-    assert captured["kwargs"].get("input") == "hello from prompt"
+    assert captured["args"] == [
+        "/usr/bin/claude",
+        "--model",
+        "sonnet",
+        "hello from prompt",
+    ]
+    # stdin must NOT be piped: piping forces Claude into non-interactive
+    # print mode, which closes the host terminal window immediately.
+    assert "input" not in captured["kwargs"]
     assert captured["kwargs"].get("text") is True
+
+
+def test_resolve_claude_command_uses_shutil_which(monkeypatch):
+    monkeypatch.setattr(claude_launcher.shutil, "which", lambda name: "/usr/bin/claude")
+    monkeypatch.setattr(claude_launcher.sys, "platform", "linux")
+
+    assert claude_launcher._resolve_claude_command() == ["/usr/bin/claude"]
+
+
+def test_resolve_claude_command_wraps_cmd_shim_on_windows(monkeypatch):
+    monkeypatch.setattr(
+        claude_launcher.shutil,
+        "which",
+        lambda name: r"C:\Users\u\AppData\Roaming\npm\claude.CMD",
+    )
+    monkeypatch.setattr(claude_launcher.sys, "platform", "win32")
+
+    assert claude_launcher._resolve_claude_command() == [
+        "cmd.exe",
+        "/c",
+        r"C:\Users\u\AppData\Roaming\npm\claude.CMD",
+    ]
+
+
+def test_resolve_claude_command_passes_through_exe_on_windows(monkeypatch):
+    monkeypatch.setattr(
+        claude_launcher.shutil,
+        "which",
+        lambda name: r"C:\Program Files\Claude\claude.exe",
+    )
+    monkeypatch.setattr(claude_launcher.sys, "platform", "win32")
+
+    assert claude_launcher._resolve_claude_command() == [
+        r"C:\Program Files\Claude\claude.exe",
+    ]
+
+
+def test_resolve_claude_command_raises_when_missing(monkeypatch):
+    monkeypatch.setattr(claude_launcher.shutil, "which", lambda name: None)
+
+    with pytest.raises(FileNotFoundError):
+        claude_launcher._resolve_claude_command()
 
 
 def test_main_deletes_prompt_file_after_success(tmp_path, monkeypatch):
