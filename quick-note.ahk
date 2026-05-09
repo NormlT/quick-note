@@ -245,7 +245,9 @@ LaunchWatcher()
 CONFIG_MOD_TIME := FileExist(CONFIG_FILE) ? FileGetTime(CONFIG_FILE, "M") : "0"
 
 ; --- System Tray ---
-A_IconTip := "Quick Note Capture"
+APP_VERSION := ""
+try APP_VERSION := Trim(FileRead(SCRIPT_DIR "\VERSION", "UTF-8"))
+A_IconTip := APP_VERSION ? "Quick Note Capture v" APP_VERSION : "Quick Note Capture"
 TraySetIcon("Shell32.dll", 70)
 
 hotkeyDisplay := HotkeyToDisplay(HOTKEY_COMBO)
